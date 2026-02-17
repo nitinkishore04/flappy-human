@@ -39,15 +39,20 @@
 <div id="msg">Tap / Click / Space = Flap</div>
 <canvas id="game"></canvas>
 
+<audio id="loseSound" preload="auto">
+  <source src="audio.mp3" type="audio/mpeg">
+</audio>
+
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const sound = document.getElementById("loseSound");
 
-/* ========= BASE GAME SIZE ========= */
+/* ========= BASE SIZE ========= */
 const BASE_W = 400;
 const BASE_H = 600;
 
-/* ========= RESPONSIVE SCALE ========= */
+/* ========= RESPONSIVE ========= */
 function resizeCanvas() {
   let scale = Math.min(
     window.innerWidth / BASE_W,
@@ -64,9 +69,14 @@ window.addEventListener("resize", resizeCanvas);
 
 /* ========= IMAGE ========= */
 const birdImg = new Image();
-birdImg.src = "img.png";
+birdImg.src = "Img.png";
 
-/* ========= GAME STATE ========= */
+/* ========= STATE ========= */
+let gameStarted = false;
+let gameOver = false;
+let audioPlaying = false;
+let showFinalMsg = false;
+
 let bird = {
   x: 80,
   y: 200,
@@ -80,7 +90,6 @@ let bird = {
 let pipes = [];
 let frame = 0;
 let score = 0;
-let gameOver = false;
 
 /* ========= CONTROLS ========= */
 document.addEventListener("keydown", e => {
@@ -90,11 +99,38 @@ document.addEventListener("click", flap);
 document.addEventListener("touchstart", flap);
 
 function flap() {
+
+  /* Start game first time */
+  if (!gameStarted) {
+    gameStarted = true;
+    return;
+  }
+
+  /* 🚫 Block restart while audio plays */
+  if (audioPlaying) return;
+
   if (gameOver) {
     resetGame();
     return;
   }
+
   bird.velocity = bird.lift;
+}
+
+/* ========= GAME OVER ========= */
+function triggerGameOver() {
+  if (!gameOver) {
+    gameOver = true;
+    audioPlaying = true;
+
+    sound.currentTime = 0;
+    sound.play();
+
+    sound.onended = () => {
+      audioPlaying = false;
+      showFinalMsg = true;
+    };
+  }
 }
 
 /* ========= PIPES ========= */
@@ -113,7 +149,8 @@ function spawnPipe() {
 
 /* ========= UPDATE ========= */
 function update() {
-  if (gameOver) return;
+
+  if (!gameStarted || gameOver) return;
 
   frame++;
   if (frame % 90 === 0) spawnPipe();
@@ -122,7 +159,7 @@ function update() {
   bird.y += bird.velocity;
 
   if (bird.y + bird.h > BASE_H || bird.y < 0) {
-    gameOver = true;
+    triggerGameOver();
   }
 
   pipes.forEach(p => {
@@ -133,7 +170,7 @@ function update() {
       bird.x + bird.w > p.x &&
       (bird.y < p.top || bird.y + bird.h > BASE_H - p.bottom)
     ) {
-      gameOver = true;
+      triggerGameOver();
     }
 
     if (!p.passed && bird.x > p.x + p.w) {
@@ -149,7 +186,7 @@ function update() {
 function draw() {
   ctx.clearRect(0, 0, BASE_W, BASE_H);
 
-  /* Bird circle clip */
+  /* Bird */
   ctx.save();
   ctx.beginPath();
   ctx.arc(
@@ -161,13 +198,9 @@ function draw() {
   );
   ctx.clip();
 
-  if (birdImg.complete && birdImg.naturalWidth > 0) {
+  if (birdImg.complete) {
     ctx.drawImage(birdImg, bird.x, bird.y, bird.w, bird.h);
-  } else {
-    ctx.fillStyle = "#ffcc00";
-    ctx.fill();
   }
-
   ctx.restore();
 
   /* Pipes */
@@ -183,20 +216,49 @@ function draw() {
   });
 
   /* Score */
-  ctx.fillStyle = "#fff";
-  ctx.font = "30px Arial";
-  ctx.fillText(score, 20, 50);
+  if (gameStarted) {
+    ctx.fillStyle = "#fff";
+    ctx.font = "30px Arial";
+    ctx.fillText(score, 20, 50);
+  }
 
-  /* Game Over */
-  if (gameOver) {
+  /* ========= START SCREEN ========= */
+  if (!gameStarted) {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0,0,BASE_W,BASE_H);
 
     ctx.fillStyle = "#fff";
     ctx.font = "40px Arial";
-    ctx.fillText("Game Over", 100, 280);
-    ctx.font = "20px Arial";
-    ctx.fillText("Tap / Click to Restart", 95, 320);
+    ctx.fillText("Sad Flappy Bird", 60, 250);
+
+    ctx.font = "22px Arial";
+    ctx.fillText("Tap / Click to Start", 90, 310);
+  }
+
+  /* ========= GAME OVER ========= */
+  if (gameOver) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(0,0,BASE_W,BASE_H);
+
+    ctx.fillStyle = "#ff4444";
+    ctx.font = "40px Arial";
+    ctx.fillText("Game Over", 100, 240);
+
+    if (!showFinalMsg) {
+      ctx.fillStyle = "#fff";
+      ctx.font = "26px Arial";
+      ctx.fillText("You Lost 😢", 120, 290);
+      ctx.font = "18px Arial";
+      ctx.fillText("Wait for judgement...", 105, 330);
+    }
+
+    if (showFinalMsg) {
+      ctx.fillStyle = "#fff";
+      ctx.font = "28px Arial";
+      ctx.fillText("Lawden Bhojyam 💀", 90, 290);
+      ctx.font = "20px Arial";
+      ctx.fillText("Tap / Click to Restart", 95, 330);
+    }
   }
 }
 
@@ -208,6 +270,7 @@ function resetGame() {
   score = 0;
   frame = 0;
   gameOver = false;
+  showFinalMsg = false;
 }
 
 /* ========= LOOP ========= */
